@@ -102,7 +102,7 @@ Tools mirror the official Linear MCP for easy switching:
 | Tool | Description |
 |------|-------------|
 | `list_issues` | List issues with filters (team, state, assignee, priority) |
-| `get_issue` | Get issue details by identifier (e.g., `UK-123`) |
+| `get_issue` | Get issue details by identifier (e.g., `DEV-123`) |
 | `list_teams` | List all teams |
 | `get_team` | Get team details |
 | `list_projects` | List all projects |

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "linear-mcp-fast"
-version = "0.2.4"
+version = "0.2.5"
 description = "Fast MCP server for Linear - reads from Linear.app's local cache on macOS"
 readme = "README.md"
 license = "MIT"
