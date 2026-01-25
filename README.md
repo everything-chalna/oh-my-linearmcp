@@ -21,31 +21,26 @@ Linear.app (Electron) syncs all your data to a local IndexedDB. This MCP server 
 - **Offline access** - Works without internet
 - **Faster iteration** - No rate limits, no latency
 
-**Use with**: Official Linear MCP for write operations (comments, status updates, issue creation).
+## Requirements
 
-## Installation
-
-```bash
-pip install linear-mcp-fast
-# or
-uv pip install linear-mcp-fast
-```
+- **macOS only** - Linear.app stores its cache at `~/Library/Application Support/Linear/`
+- **Linear.app** installed and opened at least once (to populate the cache)
 
 ## Setup
+
+Use `linear-fast` for reads and the official Linear MCP for writes.
 
 ### Claude Code
 
 ```bash
-# 1. Add linear-mcp-fast (reads from local cache)
+# Fast reads (this package)
 claude mcp add linear-fast -- uvx linear-mcp-fast
 
-# 2. Add official Linear MCP (for writes)
+# Writes via official Linear MCP
 claude mcp add --transport http linear https://mcp.linear.app/mcp
 ```
 
-Now you have:
-- `linear-fast` → Fast reads from local cache
-- `linear` → Writes (comments, updates)
+Run `/mcp` to authenticate with Linear.
 
 ### Claude Desktop
 
@@ -66,7 +61,22 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-### Cursor / VS Code
+### Cursor
+
+Install Linear MCP from [Cursor's MCP tools page](https://cursor.com/mcp), then add linear-fast:
+
+```json
+{
+  "mcpServers": {
+    "linear-fast": {
+      "command": "uvx",
+      "args": ["linear-mcp-fast"]
+    }
+  }
+}
+```
+
+### VS Code / Windsurf / Others
 
 ```json
 {
@@ -83,24 +93,16 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
----
-
-## Prerequisites
-
-- **macOS** (Linear.app stores cache in `~/Library/Application Support/Linear/`)
-- **Linear.app** installed and opened at least once
-
----
+See [Linear MCP docs](https://developers.linear.app/docs/ai/mcp-server) for Zed, Codex, v0, and other clients.
 
 ## Available Tools
 
-### Reading (linear-fast)
+Tools mirror the official Linear MCP for easy switching:
 
 | Tool | Description |
 |------|-------------|
-| `list_issues` | List issues with filters (assignee, team, state, priority) |
-| `get_issue` | Get issue details with comments |
-| `list_my_issues` | List issues assigned to a user |
+| `list_issues` | List issues with filters (team, state, assignee, priority) |
+| `get_issue` | Get issue details by identifier (e.g., `UK-123`) |
 | `list_teams` | List all teams |
 | `get_team` | Get team details |
 | `list_projects` | List all projects |
@@ -109,44 +111,37 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 | `get_user` | Get user details |
 | `list_issue_statuses` | List workflow states for a team |
 
-### Writing (official Linear MCP)
-
-Use the official Linear MCP (`linear`) for:
-- Creating/updating issues
-- Adding comments
-- Changing status
-
----
-
-## Troubleshooting
-
-### "Linear database not found"
-
-Linear.app needs to be installed and opened at least once:
-```bash
-ls ~/Library/Application\ Support/Linear/IndexedDB/
-```
-
-### Data seems stale
-
-Local cache is updated when Linear.app syncs. Open Linear.app to refresh.
-
----
+For writes (create issue, add comment, update status), use the official Linear MCP.
 
 ## How It Works
 
 ```
 Linear.app (Electron)
-    ↓ syncs to
-IndexedDB (LevelDB format)
+    ↓ syncs data to local cache
+IndexedDB (LevelDB)
 ~/Library/Application Support/Linear/IndexedDB/...
     ↓ read by
 linear-mcp-fast
-    ↓ provides
-Fast read-only access to issues, users, teams, comments
+    ↓
+Fast, offline access to issues, teams, users, projects
 ```
 
----
+## Troubleshooting
+
+**"Linear database not found"**
+
+Linear.app must be installed and opened at least once:
+```bash
+ls ~/Library/Application\ Support/Linear/IndexedDB/
+```
+
+**Data seems stale**
+
+The local cache updates when Linear.app syncs. Open Linear.app to refresh.
+
+**Returns 0 issues**
+
+Multiple IndexedDB databases may exist. Version 0.2.2+ automatically finds the correct one.
 
 ## License
 
