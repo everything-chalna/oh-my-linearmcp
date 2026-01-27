@@ -5,8 +5,10 @@ Reads Linear's local IndexedDB cache to provide fast access to issues, users,
 teams, workflow states, and comments without API calls.
 """
 
+import base64
 import json
 import os
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -36,6 +38,7 @@ class CachedData:
     comments: dict[str, dict[str, Any]] = field(default_factory=dict)
     comments_by_issue: dict[str, list[str]] = field(default_factory=dict)
     projects: dict[str, dict[str, Any]] = field(default_factory=dict)
+    issue_content: dict[str, str] = field(default_factory=dict)  # issueId -> description
     loaded_at: float = 0.0
 
     def is_expired(self) -> bool:
@@ -91,6 +94,77 @@ class LinearLocalReader:
         if isinstance(val, bytes):
             return val.decode("utf-8", errors="replace")
         return str(val)
+
+    def _extract_yjs_text(self, content_state: str | None) -> str:
+        """Extract readable text from Y.js encoded contentState."""
+        if not content_state:
+            return ""
+
+        try:
+            decoded = base64.b64decode(content_state)
+            text = decoded.decode("utf-8", errors="replace")
+
+            # Extract readable text (Korean + ASCII printable)
+            readable = re.findall(r"[\uac00-\ud7af\u0020-\u007e]+", text)
+
+            # Structural markers to skip (ProseMirror/Y.js)
+            skip_exact = {
+                "prosemirror", "paragraph", "heading", "bullet_list", "list_item",
+                "ordered_list", "level", "link", "null", "strong", "em", "code",
+                "table", "table_row", "table_cell", "table_header", "colspan",
+                "rowspan", "colwidth", "issuemention", "label", "href", "title",
+                "order", "attrs", "content", "marks", "type", "text", "doc",
+                "blockquote", "code_block", "hard_break", "horizontal_rule",
+                "image", "suggestion_usermentions", "todo_item", "done", "language",
+            }
+
+            result = []
+            for r in readable:
+                r = r.strip()
+                if len(r) < 2:
+                    continue
+
+                # Skip exact structural markers
+                if r.lower() in skip_exact:
+                    continue
+
+                # Skip Y.js IDs and encoded strings
+                if re.match(r"^w[\$\)\(A-Z]", r):
+                    continue
+
+                # Skip JSON objects and JSON-like patterns
+                if r.startswith("{") or '{"' in r:
+                    continue
+
+                # Skip link markers with JSON
+                if r.startswith("link") and "{" in r:
+                    continue
+
+                # Skip UUIDs
+                if re.match(r"^[a-f0-9-]{36}$", r):
+                    continue
+
+                # Skip single characters or pure numbers
+                if len(r) <= 2 and not re.search(r"[\uac00-\ud7af]", r):
+                    continue
+
+                # Skip strings that are mostly special characters
+                if len(r) > 0:
+                    special_ratio = sum(1 for c in r if c in "()[]{}$#@*&^%") / len(r)
+                    if special_ratio > 0.3:
+                        continue
+
+                result.append(r)
+
+            # Join and clean up
+            text = " ".join(result)
+            # Remove excessive whitespace and parentheses artifacts
+            text = re.sub(r"\s*\(\s*$", "", text)
+            text = re.sub(r"^\s*\)\s*", "", text)
+            text = re.sub(r"\s+", " ", text)
+            return text.strip()
+        except Exception:
+            return ""
 
     def _extract_comment_text(self, body_data: Any) -> str:
         """Extract plain text from ProseMirror bodyData format."""
@@ -185,11 +259,16 @@ class LinearLocalReader:
                 team_key = team.get("key", "???")
                 identifier = f"{team_key}-{val.get('number')}"
 
+                # Try descriptionData (ProseMirror format) first, fall back to description
+                description = val.get("description")
+                if not description and val.get("descriptionData"):
+                    description = self._extract_comment_text(val.get("descriptionData"))
+
                 cache.issues[val["id"]] = {
                     "id": val["id"],
                     "identifier": identifier,
                     "title": val.get("title"),
-                    "description": val.get("description"),
+                    "description": description,
                     "number": val.get("number"),
                     "priority": val.get("priority"),
                     "estimate": val.get("estimate"),
@@ -245,6 +324,21 @@ class LinearLocalReader:
                     "createdAt": val.get("createdAt"),
                     "updatedAt": val.get("updatedAt"),
                 }
+
+        # Load issue content (Y.js encoded descriptions)
+        if self._stores.issue_content:
+            for val in self._load_from_store(db, self._stores.issue_content):
+                issue_id = val.get("issueId")
+                content_state = val.get("contentState")
+                if issue_id and content_state:
+                    extracted = self._extract_yjs_text(content_state)
+                    if extracted:
+                        cache.issue_content[issue_id] = extracted
+
+        # Update issues with descriptions from issue_content
+        for issue_id, desc in cache.issue_content.items():
+            if issue_id in cache.issues and not cache.issues[issue_id].get("description"):
+                cache.issues[issue_id]["description"] = desc
 
         self._cache = cache
 

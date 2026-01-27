@@ -21,6 +21,7 @@ class DetectedStores:
     workflow_states: list[str] | None = None
     comments: str | None = None
     projects: str | None = None
+    issue_content: str | None = None  # Y.js encoded issue descriptions
 
 
 def _is_issue_record(record: dict[str, Any]) -> bool:
@@ -68,6 +69,12 @@ def _is_project_record(record: dict[str, Any]) -> bool:
     return required.issubset(record.keys())
 
 
+def _is_issue_content_record(record: dict[str, Any]) -> bool:
+    """Check if a record looks like issue content (Y.js encoded description)."""
+    required = {"issueId", "contentState"}
+    return required.issubset(record.keys())
+
+
 def detect_stores(db: ccl_chromium_indexeddb.WrappedDatabase) -> DetectedStores:
     """
     Detect object stores by sampling their first record.
@@ -109,6 +116,8 @@ def detect_stores(db: ccl_chromium_indexeddb.WrappedDatabase) -> DetectedStores:
                     result.comments = store_name
                 elif _is_project_record(val) and result.projects is None:
                     result.projects = store_name
+                elif _is_issue_content_record(val) and result.issue_content is None:
+                    result.issue_content = store_name
 
                 break  # Only check first record
         except Exception:
