@@ -8,11 +8,14 @@ While using the official Linear MCP with Claude Code, I noticed that **read oper
 
 The problem:
 - Official Linear MCP makes API calls for every read
+- Issue descriptions require separate API calls
 - Responses include excessive metadata (full user objects, workflow states, etc.)
 - Context window fills up quickly when exploring issues
 - Slower response times due to network latency
 
 My solution: **Read directly from Linear.app's local cache.**
+
+Linear.app stores issue descriptions in Y.js CRDT format. This package decodes them locally, so you get descriptions without API calls.
 
 Linear.app (Electron) syncs all your data to a local IndexedDB. This MCP server reads from that cache, giving you:
 
@@ -20,6 +23,7 @@ Linear.app (Electron) syncs all your data to a local IndexedDB. This MCP server 
 - **Smaller responses** - Only the fields you need
 - **Offline access** - Works without internet
 - **Faster iteration** - No rate limits, no latency
+- **Issue descriptions** - Extracts text from Y.js encoded content (v0.3.0+)
 
 ## Requirements
 
@@ -122,9 +126,15 @@ IndexedDB (LevelDB)
 ~/Library/Application Support/Linear/IndexedDB/...
     ↓ read by
 linear-mcp-fast
-    ↓
+    ↓ decodes Y.js CRDT content
 Fast, offline access to issues, teams, users, projects
 ```
+
+### Issue Descriptions
+
+Linear stores issue descriptions in a separate `contentState` field using Y.js CRDT encoding. This package decodes the binary format to extract readable text, so `get_issue` returns the description without an API call.
+
+Note: The extraction is text-based (not full Y.js parsing), so some formatting may be lost. For rich markdown content, use the official Linear MCP.
 
 ## Troubleshooting
 
