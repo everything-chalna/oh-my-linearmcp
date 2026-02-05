@@ -24,6 +24,7 @@ Linear.app (Electron) syncs all your data to a local IndexedDB. This MCP server 
 - **Offline access** - Works without internet
 - **Faster iteration** - No rate limits, no latency
 - **Issue descriptions** - Extracts text from Y.js encoded content (v0.3.0+)
+- **All workspaces** - Reads from all Linear workspaces on your machine (v0.4.0+)
 
 ## Requirements
 
@@ -114,6 +115,15 @@ Tools mirror the official Linear MCP for easy switching:
 | `list_users` | List all users |
 | `get_user` | Get user details |
 | `list_issue_statuses` | List workflow states for a team |
+| `list_comments` | List comments for an issue |
+| `list_issue_labels` | List available issue labels |
+| `list_initiatives` | List all initiatives |
+| `get_initiative` | Get initiative details |
+| `list_cycles` | List cycles for a team |
+| `list_documents` | List documents (optionally by project) |
+| `get_document` | Get document details |
+| `list_milestones` | List milestones for a project |
+| `list_project_updates` | List updates for a project |
 
 For writes (create issue, add comment, update status), use the official Linear MCP.
 

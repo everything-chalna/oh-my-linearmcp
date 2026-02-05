@@ -151,66 +151,6 @@ def get_issue(identifier: str) -> dict[str, Any] | None:
 
 
 @mcp.tool()
-def list_my_issues(
-    name: str,
-    state_type: str | None = None,
-    limit: int | None = None,
-) -> dict[str, Any]:
-    """
-    List issues assigned to a user.
-
-    Args:
-        name: User name to search for
-        state_type: Optional filter (started, unstarted, completed, canceled, backlog)
-        limit: Maximum issues (default: all)
-
-    Returns:
-        User info with their issues
-    """
-    reader = get_reader()
-
-    user = reader.find_user(name)
-    if not user:
-        return {"error": f"User '{name}' not found"}
-
-    all_issues = sorted(
-        reader.get_issues_for_user(user["id"]),
-        key=lambda x: (x.get("priority") or 4, x.get("id", "")),
-    )
-
-    counts_by_state: dict[str, int] = {}
-    for issue in all_issues:
-        issue_state_type = reader.get_state_type(issue.get("stateId", ""))
-        counts_by_state[issue_state_type] = counts_by_state.get(issue_state_type, 0) + 1
-
-    if state_type:
-        all_issues = [
-            i for i in all_issues
-            if reader.get_state_type(i.get("stateId", "")) == state_type
-        ]
-
-    page = all_issues[:limit] if limit else all_issues
-
-    results = []
-    for issue in page:
-        results.append({
-            "identifier": issue.get("identifier"),
-            "title": issue.get("title"),
-            "priority": issue.get("priority"),
-            "state": reader.get_state_name(issue.get("stateId", "")),
-            "stateType": reader.get_state_type(issue.get("stateId", "")),
-            "dueDate": issue.get("dueDate"),
-        })
-
-    return {
-        "user": {"name": user.get("name"), "email": user.get("email")},
-        "totalIssues": sum(counts_by_state.values()),
-        "countsByState": counts_by_state,
-        "issues": results,
-    }
-
-
-@mcp.tool()
 def list_teams() -> list[dict[str, Any]]:
     """
     List all teams with issue counts.
@@ -453,6 +393,300 @@ def list_issue_statuses(team: str) -> list[dict[str, Any]]:
             })
 
     results.sort(key=lambda x: (x.get("position") or 0))
+    return results
+
+
+@mcp.tool()
+def list_comments(issue_id: str) -> list[dict[str, Any]]:
+    """
+    List comments for a specific issue.
+
+    Args:
+        issue_id: Issue identifier (e.g., 'UK-55')
+
+    Returns:
+        List of comments with author info
+    """
+    reader = get_reader()
+    issue = reader.get_issue_by_identifier(issue_id)
+
+    if not issue:
+        return []
+
+    comments = reader.get_comments_for_issue(issue["id"])
+    results = []
+    for comment in comments:
+        user = reader.users.get(comment.get("userId", ""), {})
+        results.append({
+            "id": comment.get("id"),
+            "author": user.get("name", "Unknown"),
+            "body": comment.get("body", ""),
+            "createdAt": comment.get("createdAt"),
+            "updatedAt": comment.get("updatedAt"),
+        })
+
+    return results
+
+
+@mcp.tool()
+def list_issue_labels(team: str | None = None) -> list[dict[str, Any]]:
+    """
+    List available issue labels.
+
+    Args:
+        team: Optional team key to filter team-specific labels
+
+    Returns:
+        List of labels
+    """
+    reader = get_reader()
+
+    team_id = None
+    if team:
+        team_obj = reader.find_team(team)
+        if team_obj:
+            team_id = team_obj["id"]
+
+    results = []
+    for label in reader.labels.values():
+        # Include workspace labels (no teamId) and team-specific labels
+        if team_id and label.get("teamId") and label.get("teamId") != team_id:
+            continue
+        results.append({
+            "id": label.get("id"),
+            "name": label.get("name"),
+            "color": label.get("color"),
+            "isGroup": label.get("isGroup"),
+        })
+
+    results.sort(key=lambda x: x.get("name", "") or "")
+    return results
+
+
+@mcp.tool()
+def list_initiatives() -> list[dict[str, Any]]:
+    """
+    List all initiatives.
+
+    Returns:
+        List of initiatives
+    """
+    reader = get_reader()
+    results = []
+
+    for initiative in reader.initiatives.values():
+        results.append({
+            "id": initiative.get("id"),
+            "name": initiative.get("name"),
+            "slugId": initiative.get("slugId"),
+            "color": initiative.get("color"),
+            "status": initiative.get("status"),
+            "owner": reader.get_user_name(initiative.get("ownerId")),
+        })
+
+    results.sort(key=lambda x: x.get("name", "") or "")
+    return results
+
+
+@mcp.tool()
+def get_initiative(name: str) -> dict[str, Any] | None:
+    """
+    Get initiative details by name.
+
+    Args:
+        name: Initiative name (partial match)
+
+    Returns:
+        Initiative details or None if not found
+    """
+    reader = get_reader()
+    initiative = reader.find_initiative(name)
+
+    if not initiative:
+        return None
+
+    return {
+        "id": initiative.get("id"),
+        "name": initiative.get("name"),
+        "slugId": initiative.get("slugId"),
+        "color": initiative.get("color"),
+        "status": initiative.get("status"),
+        "owner": reader.get_user_name(initiative.get("ownerId")),
+        "teamIds": initiative.get("teamIds", []),
+        "createdAt": initiative.get("createdAt"),
+        "updatedAt": initiative.get("updatedAt"),
+    }
+
+
+@mcp.tool()
+def list_cycles(team: str) -> list[dict[str, Any]]:
+    """
+    List cycles for a team.
+
+    Args:
+        team: Team key (e.g., 'UK')
+
+    Returns:
+        List of cycles sorted by number (newest first)
+    """
+    reader = get_reader()
+
+    team_obj = reader.find_team(team)
+    if not team_obj:
+        return []
+
+    cycles = reader.get_cycles_for_team(team_obj["id"])
+    results = []
+    for cycle in cycles:
+        progress = cycle.get("currentProgress", {})
+        results.append({
+            "id": cycle.get("id"),
+            "number": cycle.get("number"),
+            "startsAt": cycle.get("startsAt"),
+            "endsAt": cycle.get("endsAt"),
+            "completedAt": cycle.get("completedAt"),
+            "progress": {
+                "completed": progress.get("completedIssueCount", 0),
+                "started": progress.get("startedIssueCount", 0),
+                "unstarted": progress.get("unstartedIssueCount", 0),
+                "total": progress.get("scopeCount", 0),
+            } if progress else None,
+        })
+
+    return results
+
+
+@mcp.tool()
+def list_documents(project: str | None = None) -> list[dict[str, Any]]:
+    """
+    List documents, optionally filtered by project.
+
+    Args:
+        project: Optional project name to filter
+
+    Returns:
+        List of documents
+    """
+    reader = get_reader()
+
+    project_id = None
+    if project:
+        project_obj = reader.find_project(project)
+        if project_obj:
+            project_id = project_obj["id"]
+        else:
+            return []
+
+    results = []
+    for doc in reader.documents.values():
+        if project_id and doc.get("projectId") != project_id:
+            continue
+        results.append({
+            "id": doc.get("id"),
+            "title": doc.get("title"),
+            "slugId": doc.get("slugId"),
+            "project": reader.get_project_name(doc.get("projectId")),
+            "createdAt": doc.get("createdAt"),
+            "updatedAt": doc.get("updatedAt"),
+        })
+
+    results.sort(key=lambda x: x.get("updatedAt", "") or "", reverse=True)
+    return results
+
+
+@mcp.tool()
+def get_document(name: str) -> dict[str, Any] | None:
+    """
+    Get document details by title.
+
+    Args:
+        name: Document title (partial match)
+
+    Returns:
+        Document details or None if not found
+    """
+    reader = get_reader()
+    doc = reader.find_document(name)
+
+    if not doc:
+        return None
+
+    return {
+        "id": doc.get("id"),
+        "title": doc.get("title"),
+        "slugId": doc.get("slugId"),
+        "project": reader.get_project_name(doc.get("projectId")),
+        "creator": reader.get_user_name(doc.get("creatorId")),
+        "createdAt": doc.get("createdAt"),
+        "updatedAt": doc.get("updatedAt"),
+        "url": f"https://linear.app/document/{doc.get('slugId')}",
+    }
+
+
+@mcp.tool()
+def list_milestones(project: str) -> list[dict[str, Any]]:
+    """
+    List milestones for a project.
+
+    Args:
+        project: Project name
+
+    Returns:
+        List of milestones sorted by order
+    """
+    reader = get_reader()
+
+    project_obj = reader.find_project(project)
+    if not project_obj:
+        return []
+
+    milestones = reader.get_milestones_for_project(project_obj["id"])
+    results = []
+    for milestone in milestones:
+        progress = milestone.get("currentProgress", {})
+        results.append({
+            "id": milestone.get("id"),
+            "name": milestone.get("name"),
+            "targetDate": milestone.get("targetDate"),
+            "progress": {
+                "completed": progress.get("completedIssueCount", 0),
+                "started": progress.get("startedIssueCount", 0),
+                "unstarted": progress.get("unstartedIssueCount", 0),
+                "total": progress.get("scopeCount", 0),
+            } if progress else None,
+        })
+
+    return results
+
+
+@mcp.tool()
+def list_project_updates(project: str) -> list[dict[str, Any]]:
+    """
+    List updates for a project.
+
+    Args:
+        project: Project name
+
+    Returns:
+        List of project updates sorted by date (newest first)
+    """
+    reader = get_reader()
+
+    project_obj = reader.find_project(project)
+    if not project_obj:
+        return []
+
+    updates = reader.get_updates_for_project(project_obj["id"])
+    results = []
+    for update in updates:
+        results.append({
+            "id": update.get("id"),
+            "body": update.get("body"),
+            "health": update.get("health"),
+            "author": reader.get_user_name(update.get("userId")),
+            "createdAt": update.get("createdAt"),
+        })
+
     return results
 
 

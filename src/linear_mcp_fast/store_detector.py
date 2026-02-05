@@ -22,6 +22,14 @@ class DetectedStores:
     comments: str | None = None
     projects: str | None = None
     issue_content: str | None = None  # Y.js encoded issue descriptions
+    labels: list[str] | None = None  # Issue labels (team + workspace)
+    initiatives: str | None = None
+    project_statuses: str | None = None
+    cycles: str | None = None
+    documents: str | None = None
+    document_content: str | None = None
+    milestones: str | None = None
+    project_updates: str | None = None
 
 
 def _is_issue_record(record: dict[str, Any]) -> bool:
@@ -75,6 +83,66 @@ def _is_issue_content_record(record: dict[str, Any]) -> bool:
     return required.issubset(record.keys())
 
 
+def _is_label_record(record: dict[str, Any]) -> bool:
+    """Check if a record looks like a label."""
+    required = {"name", "color", "isGroup"}
+    return required.issubset(record.keys())
+
+
+def _is_initiative_record(record: dict[str, Any]) -> bool:
+    """Check if a record looks like an initiative."""
+    required = {"name", "ownerId", "slugId", "frequencyResolution"}
+    return required.issubset(record.keys())
+
+
+def _is_project_status_record(record: dict[str, Any]) -> bool:
+    """Check if a record looks like a project status."""
+    if not {"name", "color", "position", "type", "indefinite"}.issubset(record.keys()):
+        return False
+    # Must not have teamId (that's workflow state)
+    return "teamId" not in record
+
+
+def _is_cycle_record(record: dict[str, Any]) -> bool:
+    """Check if a record looks like a cycle."""
+    required = {"number", "teamId", "startsAt", "endsAt"}
+    return required.issubset(record.keys())
+
+
+def _is_document_record(record: dict[str, Any]) -> bool:
+    """Check if a record looks like a document."""
+    required = {"title", "slugId", "projectId", "sortOrder"}
+    has_required = required.issubset(record.keys())
+    # Must not be an issue
+    not_issue = "number" not in record and "stateId" not in record
+    return has_required and not_issue
+
+
+def _is_document_content_record(record: dict[str, Any]) -> bool:
+    """Check if a record looks like document content."""
+    required = {"documentContentId", "contentData"}
+    return required.issubset(record.keys())
+
+
+def _is_milestone_record(record: dict[str, Any]) -> bool:
+    """Check if a record looks like a project milestone."""
+    required = {"name", "projectId", "sortOrder"}
+    has_required = required.issubset(record.keys())
+    # May have targetDate, currentProgress
+    has_progress = "currentProgress" in record or "targetDate" in record
+    return has_required and has_progress
+
+
+def _is_project_update_record(record: dict[str, Any]) -> bool:
+    """Check if a record looks like a project update."""
+    # Has body and either projectId or health field
+    has_body = "body" in record
+    has_project = "projectId" in record or "health" in record
+    # Must not be a comment
+    not_comment = "issueId" not in record
+    return has_body and has_project and not_comment
+
+
 def detect_stores(db: ccl_chromium_indexeddb.WrappedDatabase) -> DetectedStores:
     """
     Detect object stores by sampling their first record.
@@ -85,7 +153,7 @@ def detect_stores(db: ccl_chromium_indexeddb.WrappedDatabase) -> DetectedStores:
     Returns:
         DetectedStores with detected store names for each entity type.
     """
-    result = DetectedStores(users=[], workflow_states=[])
+    result = DetectedStores(users=[], workflow_states=[], labels=[])
 
     for store_name in db.object_store_names:
         if store_name is None or store_name.startswith("_") or "_partial" in store_name:
@@ -118,6 +186,24 @@ def detect_stores(db: ccl_chromium_indexeddb.WrappedDatabase) -> DetectedStores:
                     result.projects = store_name
                 elif _is_issue_content_record(val) and result.issue_content is None:
                     result.issue_content = store_name
+                elif _is_label_record(val) and store_name not in (result.labels or []):
+                    if result.labels is None:
+                        result.labels = []
+                    result.labels.append(store_name)
+                elif _is_initiative_record(val) and result.initiatives is None:
+                    result.initiatives = store_name
+                elif _is_project_status_record(val) and result.project_statuses is None:
+                    result.project_statuses = store_name
+                elif _is_cycle_record(val) and result.cycles is None:
+                    result.cycles = store_name
+                elif _is_document_record(val) and result.documents is None:
+                    result.documents = store_name
+                elif _is_document_content_record(val) and result.document_content is None:
+                    result.document_content = store_name
+                elif _is_milestone_record(val) and result.milestones is None:
+                    result.milestones = store_name
+                elif _is_project_update_record(val) and result.project_updates is None:
+                    result.project_updates = store_name
 
                 break  # Only check first record
         except Exception:
