@@ -46,6 +46,7 @@ class CachedData:
     document_content: dict[str, dict[str, Any]] = field(default_factory=dict)
     milestones: dict[str, dict[str, Any]] = field(default_factory=dict)
     project_updates: dict[str, dict[str, Any]] = field(default_factory=dict)
+    project_statuses: dict[str, dict[str, Any]] = field(default_factory=dict)
     loaded_at: float = 0.0
 
     def is_expired(self) -> bool:
@@ -133,8 +134,15 @@ class LinearLocalReader:
                 if len(r) < 2:
                     continue
 
-                # Skip exact structural markers
-                if r.lower() in skip_exact:
+                r_lower = r.lower()
+                if r_lower in skip_exact:
+                    continue
+
+                # Handle structural markers that include trailing characters.
+                skip_prefixes = {
+                    "suggestion_usermentions", "issuemention", "prosemirror",
+                }
+                if any(r_lower.startswith(p) for p in skip_prefixes):
                     continue
 
                 # Skip Y.js IDs and encoded strings
@@ -226,6 +234,12 @@ class LinearLocalReader:
         for db in databases:
             stores = detect_stores(db)
             self._load_from_db(db, stores, cache)
+
+        # Resolve project state names from statusId after all DBs are loaded.
+        for project in cache.projects.values():
+            status_id = project.get("statusId")
+            if status_id and status_id in cache.project_statuses:
+                project["state"] = cache.project_statuses[status_id].get("name")
 
         self._cache = cache
 
@@ -333,7 +347,7 @@ class LinearLocalReader:
                     "slugId": val.get("slugId"),
                     "icon": val.get("icon"),
                     "color": val.get("color"),
-                    "state": val.get("state"),
+                    "state": None,
                     "statusId": val.get("statusId"),
                     "priority": val.get("priority"),
                     "teamIds": val.get("teamIds", []),
@@ -442,6 +456,18 @@ class LinearLocalReader:
                     "sortOrder": val.get("sortOrder"),
                     "currentProgress": val.get("currentProgress"),
                 }
+
+        # Load project statuses
+        if stores.project_statuses:
+            for val in self._load_from_store(db, stores.project_statuses):
+                status_id = val.get("id")
+                if status_id and status_id not in cache.project_statuses:
+                    cache.project_statuses[status_id] = {
+                        "id": status_id,
+                        "name": val.get("name"),
+                        "color": val.get("color"),
+                        "type": val.get("type"),
+                    }
 
         # Load project updates
         if stores.project_updates:

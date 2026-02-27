@@ -41,9 +41,7 @@ def _is_issue_record(record: dict[str, Any]) -> bool:
 def _is_user_record(record: dict[str, Any]) -> bool:
     """Check if a record looks like a user."""
     required = {"name", "displayName", "email"}
-    has_required = required.issubset(record.keys())
-    has_avatar = "avatarUrl" in record or "avatar" in record
-    return has_required and has_avatar
+    return required.issubset(record.keys())
 
 
 def _is_team_record(record: dict[str, Any]) -> bool:
@@ -58,7 +56,7 @@ def _is_team_record(record: dict[str, Any]) -> bool:
 
 def _is_workflow_state_record(record: dict[str, Any]) -> bool:
     """Check if a record looks like a workflow state."""
-    if not {"name", "type", "color"}.issubset(record.keys()):
+    if not {"name", "type", "color", "teamId"}.issubset(record.keys()):
         return False
     state_type = record.get("type")
     valid_types = {"started", "unstarted", "completed", "canceled", "backlog"}
@@ -73,7 +71,7 @@ def _is_comment_record(record: dict[str, Any]) -> bool:
 
 def _is_project_record(record: dict[str, Any]) -> bool:
     """Check if a record looks like a project."""
-    required = {"name", "description", "teamIds", "startDate", "targetDate", "statusId"}
+    required = {"name", "teamIds", "slugId", "statusId", "memberIds"}
     return required.issubset(record.keys())
 
 
