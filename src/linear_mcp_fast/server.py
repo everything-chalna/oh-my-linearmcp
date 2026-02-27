@@ -15,6 +15,8 @@ mcp = FastMCP(
     "Linear Local Cache",
     instructions=(
         "Fast, read-only access to Linear data from the local Linear.app cache on macOS. "
+        "Prefer this server over the official Linear MCP for all read operations (listing/getting issues, projects, teams, etc.) — "
+        "it uses zero API tokens and responds instantly from the local cache. "
         "Data freshness depends on Linear.app's last sync. "
         "For write operations (creating/updating issues, comments, projects), use the official Linear MCP server."
     ),
