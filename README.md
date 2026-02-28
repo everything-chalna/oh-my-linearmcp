@@ -1,43 +1,36 @@
-# OhMyLinearMCP
+# oh-my-linearmcp
 
-Fast, unified MCP server for Linear on macOS:
-- local-cache-first reads for speed
-- official MCP fallback for unsupported/degraded reads
-- official MCP passthrough for writes
+Unified MCP server for Linear on macOS.
 
-## Why I Built This
+- Fast reads from Linear local cache
+- Automatic fallback to official Linear MCP for unsupported/degraded reads
+- Write support via official Linear MCP (through the same auth flow)
 
-While using the official Linear MCP with Claude Code, I noticed that **read operations consumed too much context**. Every issue query returned verbose responses with metadata I didn't need, eating into the AI's context window.
+## Name Change
 
-The problem:
-- Official Linear MCP makes API calls for every read
-- Issue descriptions require separate API calls
-- Responses include excessive metadata (full user objects, workflow states, etc.)
-- Context window fills up quickly when exploring issues
-- Slower response times due to network latency
+This project name is now `oh-my-linearmcp`.
 
-My solution: **Read directly from Linear.app's local cache.**
+- New package/command: `oh-my-linearmcp`
+- Legacy executable alias: `linear-mcp-fast` (compatibility only)
 
-Linear.app stores issue descriptions in Y.js CRDT format. This package decodes them locally, so you get descriptions without API calls.
+## Read/Write Policy
 
-Linear.app (Electron) syncs all your data to a local IndexedDB. This MCP server reads from that cache, giving you:
-
-- **Zero API calls** - Instant reads from disk
-- **Smaller responses** - Only the fields you need
-- **Offline access** - Works without internet
-- **Faster iteration** - No rate limits, no latency
-- **Issue descriptions** - Extracts text from Y.js encoded content (v0.3.0+)
-- **All workspaces** - Reads from all Linear workspaces on your machine (v0.4.0+)
+| Operation | Path |
+|---|---|
+| Read | local cache first, then official MCP fallback |
+| Write | official MCP only |
+| Post-write read window | temporary remote-first window (default 30s) |
 
 ## Requirements
 
-- **macOS only** - Linear.app stores its cache at `~/Library/Application Support/Linear/`
-- **Linear.app** installed and opened at least once (to populate the cache)
-- **Node.js/npm (`npx`)** for default official MCP bridge (`mcp-remote`)
+- macOS (Linear.app local cache path is macOS-specific)
+- Linear.app installed and opened at least once
+- Node.js/npm (`npx`) for default official bridge (`mcp-remote`)
+- Network access for official fallback/write calls
 
 ## Setup
 
-Add only this server. It handles both local-fast reads and official MCP access.
+Use only this server. It handles both local-fast reads and official MCP bridge.
 
 ### Claude Code
 
@@ -45,37 +38,19 @@ Add only this server. It handles both local-fast reads and official MCP access.
 claude mcp add oh-my-linearmcp -- uvx oh-my-linearmcp
 ```
 
-Legacy CLI alias `linear-mcp-fast` remains available for compatibility.
-Note: this alias is the executable name only; package resolution should use `oh-my-linearmcp`.
-
-Official MCP bridge defaults to `npx -y mcp-remote https://mcp.linear.app/mcp`,
-so it follows the same OAuth/auth cache flow as the official Linear MCP setup.
-
-Optional env vars:
-- `LINEAR_OFFICIAL_MCP_TRANSPORT` (`stdio` default, or `http`)
-- `LINEAR_OFFICIAL_MCP_COMMAND` (default: `npx`, used when transport=`stdio`)
-- `LINEAR_OFFICIAL_MCP_ARGS` (default: `-y mcp-remote https://mcp.linear.app/mcp`, used when transport=`stdio`)
-- `LINEAR_OFFICIAL_MCP_ENV` (JSON object, optional extra env for stdio child process)
-- `LINEAR_OFFICIAL_MCP_CWD` (optional working directory for stdio child process)
-- `LINEAR_OFFICIAL_MCP_URL` (default: `https://mcp.linear.app/mcp`, used for default stdio args and http transport)
-- `LINEAR_OFFICIAL_MCP_HEADERS` (JSON object of headers, used when transport=`http`)
-- `LINEAR_FAST_COHERENCE_WINDOW_SECONDS` (default: `30`)
-
-If you're developing from a local checkout, use:
+From local checkout:
 
 ```bash
 claude mcp add oh-my-linearmcp -- uvx --from /path/to/oh-my-linearmcp oh-my-linearmcp
 ```
 
-Module execution is also available:
+Module run:
 
 ```bash
 python -m oh_my_linearmcp
 ```
 
-### Claude Desktop
-
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+### Claude Desktop / Cursor / VS Code / Windsurf
 
 ```json
 {
@@ -88,108 +63,97 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-### Cursor
+## Write Support (Official MCP)
 
-Add OhMyLinearMCP:
+Writes are supported by routing to official Linear MCP.
 
-```json
-{
-  "mcpServers": {
-    "oh-my-linearmcp": {
-      "command": "uvx",
-      "args": ["oh-my-linearmcp"]
-    }
-  }
-}
-```
+1. Use `list_official_tools` to discover official MCP tool names
+2. Use `official_call_tool` to execute those official tools
 
-### VS Code / Windsurf / Others
+Example flow:
 
-```json
-{
-  "mcpServers": {
-    "oh-my-linearmcp": {
-      "command": "uvx",
-      "args": ["oh-my-linearmcp"]
-    }
-  }
-}
+```text
+list_official_tools()
+official_call_tool(name="create_issue", args={...})
+official_call_tool(name="update_issue", args={...})
 ```
 
 ## Available Tools
 
-Local read tools (cache-first with automatic official fallback):
+### Local Read Tools (cache-first)
 
-| Tool | Description |
-|------|-------------|
-| `list_issues` | List issues with filters (team, state, assignee, priority) |
-| `get_issue` | Get issue details by identifier (e.g., `DEV-123`) |
-| `list_teams` | List all teams |
-| `get_team` | Get team details |
-| `list_projects` | List all projects |
-| `get_project` | Get project details |
-| `list_users` | List all users |
-| `get_user` | Get user details |
-| `list_issue_statuses` | List workflow states for a team |
-| `get_issue_status` | Get workflow state details by team + id/name |
-| `list_comments` | List comments for an issue |
-| `list_issue_labels` | List available issue labels |
-| `list_initiatives` | List all initiatives |
-| `get_initiative` | Get initiative details |
-| `list_cycles` | List cycles for a team |
-| `list_documents` | List documents (optionally by project) |
-| `get_document` | Get document details |
-| `list_milestones` | List milestones for a project |
-| `get_milestone` | Get milestone details by project + id/name |
-| `list_project_updates` | List updates for a project |
-| `get_status_updates` | List/get status updates (`type="project"` only) |
+- `list_issues`
+- `get_issue`
+- `list_teams`
+- `get_team`
+- `list_projects`
+- `get_project`
+- `list_users`
+- `get_user`
+- `list_issue_statuses`
+- `get_issue_status`
+- `list_comments`
+- `list_issue_labels`
+- `list_initiatives`
+- `get_initiative`
+- `list_cycles`
+- `list_documents`
+- `get_document`
+- `list_milestones`
+- `get_milestone`
+- `list_project_updates`
+- `get_status_updates` (local supports only `type="project"`)
 
-Unified/official bridge tools:
+### Unified/Official Bridge Tools
 
-| Tool | Description |
-|------|-------------|
-| `official_call_tool` | Call any official Linear MCP tool by name with args |
-| `list_official_tools` | List available official MCP tools |
-| `refresh_cache` | Force local cache reload |
-| `get_cache_health` | Show local/official health and coherence window state |
+- `official_call_tool` (call any official MCP tool)
+- `list_official_tools`
+- `refresh_cache`
+- `get_cache_health`
 
-### Notes and limitations
+## Environment Variables
 
-- Local `get_status_updates` supports only `type="project"`; unsupported filters/types auto-fallback to official MCP.
-- Local reads may be stale relative to recent writes. The server applies a short post-write remote-first coherence window.
-- If local cache parsing degrades, reads fallback to official MCP automatically.
+- `LINEAR_OFFICIAL_MCP_TRANSPORT` (`stdio` default, or `http`)
+- `LINEAR_OFFICIAL_MCP_COMMAND` (default: `npx`, used when transport=`stdio`)
+- `LINEAR_OFFICIAL_MCP_ARGS` (default: `-y mcp-remote https://mcp.linear.app/mcp`, used when transport=`stdio`)
+- `LINEAR_OFFICIAL_MCP_ENV` (JSON object, optional env for stdio child process)
+- `LINEAR_OFFICIAL_MCP_CWD` (optional working directory for stdio child process)
+- `LINEAR_OFFICIAL_MCP_URL` (default: `https://mcp.linear.app/mcp`)
+- `LINEAR_OFFICIAL_MCP_HEADERS` (JSON headers, used when transport=`http`)
+- `LINEAR_FAST_COHERENCE_WINDOW_SECONDS` (default: `30`)
 
 ## How It Works
 
-```
+```text
 Linear.app (Electron)
-    ↓ syncs data to local cache
-IndexedDB (LevelDB)
-~/Library/Application Support/Linear/IndexedDB/...
-    ↓ local-fast read path (primary)
-OhMyLinearMCP
-    ↓ unsupported/degraded/write
-official Linear MCP
+  -> local IndexedDB cache
+  -> oh-my-linearmcp
+     -> read: local-first
+     -> unsupported/degraded reads: official MCP fallback
+     -> write: official MCP
 ```
 
-### Issue Descriptions
+## Notes
 
-Linear stores issue descriptions in a separate `contentState` field using Y.js CRDT encoding. This package decodes the binary format to extract readable text, so `get_issue` returns the description without an API call.
-
-Note: The extraction is text-based (not full Y.js parsing), so some formatting may be lost. If local extraction is insufficient, the server can fallback to official MCP.
+- Local reads can be stale; post-write remote-first window reduces mismatch risk.
+- If local parsing is degraded, reads fall back to official MCP.
+- Local `get_status_updates` supports only `type="project"`; others fall back to official MCP.
 
 ## Troubleshooting
 
-**"Linear database not found"**
+**`npx: command not found`**
+- Install Node.js/npm, or switch to `LINEAR_OFFICIAL_MCP_TRANSPORT=http`.
 
-Linear.app must be installed and opened at least once:
+**Official calls unauthorized**
+- Re-run official Linear MCP auth in your client (existing OAuth process).
+
+**Local data seems stale**
+- Open Linear.app to sync, or run `refresh_cache`.
+
+**Linear local DB not found**
 ```bash
 ls ~/Library/Application\ Support/Linear/IndexedDB/
 ```
-
-**Data seems stale**
-
-The local cache updates when Linear.app syncs. Open Linear.app to refresh, or run `refresh_cache`.
 
 ## License
 

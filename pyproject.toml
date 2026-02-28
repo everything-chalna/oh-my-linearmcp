@@ -30,9 +30,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/everything-chalna/linear-mcp-fast"
-Repository = "https://github.com/everything-chalna/linear-mcp-fast"
-Issues = "https://github.com/everything-chalna/linear-mcp-fast/issues"
+Homepage = "https://github.com/everything-chalna/oh-my-linearmcp"
+Repository = "https://github.com/everything-chalna/oh-my-linearmcp"
+Issues = "https://github.com/everything-chalna/oh-my-linearmcp/issues"
 
 [project.scripts]
 oh-my-linearmcp = "linear_mcp_fast:main"
