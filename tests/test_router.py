@@ -165,7 +165,46 @@ def test_remote_first_falls_back_to_local_when_remote_fails(monkeypatch: pytest.
     result = router.call_read("list_issues", {})
 
     assert result == {"source": "local"}
-    assert len(official.calls) >= 2
+    assert len(official.calls) == 2
+
+
+def test_remote_first_tool_error_does_not_fallback_to_local(monkeypatch: pytest.MonkeyPatch):
+    reader = FakeReader(degraded=False)
+    official = FakeOfficial()
+    official.responses["create_issue"] = {"id": "ISS-1"}
+    official.exceptions["list_issues"] = OfficialToolError("official_tool_error", "bad args")
+
+    def handler(_reader, **_kwargs):
+        return {"source": "local"}
+
+    _install_local_handler(monkeypatch, handler)
+
+    router = ToolRouter(reader, official, coherence_window_seconds=30)
+    router.call_official("create_issue", {"title": "T"})
+    with pytest.raises(OfficialToolError) as exc_info:
+        router.call_read("list_issues", {})
+
+    assert exc_info.value.code == "official_tool_error"
+    assert len(official.calls) == 2
+
+
+def test_remote_first_degraded_local_does_not_retry_official_twice(monkeypatch: pytest.MonkeyPatch):
+    reader = FakeReader(degraded=True)
+    official = FakeOfficial()
+    official.responses["create_issue"] = {"id": "ISS-1"}
+    official.exceptions["list_issues"] = OfficialToolError("official_unavailable", "offline")
+
+    def handler(_reader, **_kwargs):
+        return {"source": "local-stale"}
+
+    _install_local_handler(monkeypatch, handler)
+
+    router = ToolRouter(reader, official, coherence_window_seconds=30)
+    router.call_official("create_issue", {"title": "T"})
+    result = router.call_read("list_issues", {})
+
+    assert result == {"source": "local-stale"}
+    assert len(official.calls) == 2
 
 
 def test_non_write_official_call_does_not_force_remote_first(monkeypatch: pytest.MonkeyPatch):

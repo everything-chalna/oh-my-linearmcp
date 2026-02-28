@@ -33,6 +33,7 @@ Linear.app (Electron) syncs all your data to a local IndexedDB. This MCP server 
 
 - **macOS only** - Linear.app stores its cache at `~/Library/Application Support/Linear/`
 - **Linear.app** installed and opened at least once (to populate the cache)
+- **Node.js/npm (`npx`)** for default official MCP bridge (`mcp-remote`)
 
 ## Setup
 
@@ -45,18 +46,31 @@ claude mcp add oh-my-linearmcp -- uvx oh-my-linearmcp
 ```
 
 Legacy CLI alias `linear-mcp-fast` remains available for compatibility.
+Note: this alias is the executable name only; package resolution should use `oh-my-linearmcp`.
 
-If your client supports OAuth passthrough for remote MCP, authenticate when prompted.
+Official MCP bridge defaults to `npx -y mcp-remote https://mcp.linear.app/mcp`,
+so it follows the same OAuth/auth cache flow as the official Linear MCP setup.
 
 Optional env vars:
-- `LINEAR_OFFICIAL_MCP_URL` (default: `https://mcp.linear.app/mcp`)
-- `LINEAR_OFFICIAL_MCP_HEADERS` (JSON object of headers for remote MCP requests)
+- `LINEAR_OFFICIAL_MCP_TRANSPORT` (`stdio` default, or `http`)
+- `LINEAR_OFFICIAL_MCP_COMMAND` (default: `npx`, used when transport=`stdio`)
+- `LINEAR_OFFICIAL_MCP_ARGS` (default: `-y mcp-remote https://mcp.linear.app/mcp`, used when transport=`stdio`)
+- `LINEAR_OFFICIAL_MCP_ENV` (JSON object, optional extra env for stdio child process)
+- `LINEAR_OFFICIAL_MCP_CWD` (optional working directory for stdio child process)
+- `LINEAR_OFFICIAL_MCP_URL` (default: `https://mcp.linear.app/mcp`, used for default stdio args and http transport)
+- `LINEAR_OFFICIAL_MCP_HEADERS` (JSON object of headers, used when transport=`http`)
 - `LINEAR_FAST_COHERENCE_WINDOW_SECONDS` (default: `30`)
 
 If you're developing from a local checkout, use:
 
 ```bash
 claude mcp add oh-my-linearmcp -- uvx --from /path/to/oh-my-linearmcp oh-my-linearmcp
+```
+
+Module execution is also available:
+
+```bash
+python -m oh_my_linearmcp
 ```
 
 ### Claude Desktop

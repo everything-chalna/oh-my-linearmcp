@@ -87,21 +87,40 @@ class ToolRouter:
 
     def call_read(self, tool_name: str, arguments: dict[str, Any] | None = None) -> Any:
         args = arguments or {}
+        remote_error: OfficialToolError | None = None
 
         if self._read_remote_first():
             try:
                 return self.call_official(tool_name, args)
-            except OfficialToolError:
+            except OfficialToolError as exc:
+                if exc.code == "official_tool_error":
+                    raise
                 logger.warning("Remote-first read failed for %s, falling back to local", tool_name)
+                remote_error = exc
 
         try:
             return self._call_local(tool_name, args)
         except local_handlers.LocalFallbackRequested as local_exc:
+            if remote_error is not None:
+                if local_exc.code == "degraded_local":
+                    logger.warning(
+                        "Returning stale local for %s because remote failed during remote-first window",
+                        tool_name,
+                    )
+                    return self._call_local(tool_name, args, allow_degraded=True)
+                raise remote_error
+
             try:
                 return self.call_official(tool_name, args)
-            except OfficialToolError:
+            except OfficialToolError as official_exc:
+                if official_exc.code == "official_tool_error":
+                    raise
                 if local_exc.code == "degraded_local":
                     # When remote is unavailable, stale local read is better than hard failure.
+                    logger.warning(
+                        "Returning stale local for %s because remote is unavailable and local is degraded",
+                        tool_name,
+                    )
                     return self._call_local(tool_name, args, allow_degraded=True)
                 raise
         except Exception:
