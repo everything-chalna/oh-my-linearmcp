@@ -21,11 +21,15 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def _lifespan(server: FastMCP) -> AsyncIterator[None]:
-    """Eagerly load local cache on server startup."""
+    """Eagerly load local cache and verify official MCP connection on startup."""
     try:
         get_reader().refresh_cache(force=True)
     except Exception as exc:
         logger.warning("Cache init failed, starting degraded: %s", exc)
+    try:
+        get_official().list_tools()
+    except Exception as exc:
+        logger.warning("Official MCP connection check failed: %s", exc)
     yield
 
 
