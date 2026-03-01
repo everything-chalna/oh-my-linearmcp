@@ -26,9 +26,6 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[None]:
         get_reader().refresh_cache(force=True)
     except Exception as exc:
         logger.warning("Cache init failed, starting degraded: %s", exc)
-    # Clear cached access/refresh tokens (but keep client registration)
-    # so mcp-remote triggers a fresh browser login on every reconnect.
-    get_official()._clear_token_cache()
     try:
         get_official()._ensure_connected()
     except Exception as exc:
