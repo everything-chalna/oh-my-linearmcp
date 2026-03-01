@@ -106,6 +106,7 @@ class LinearLocalReader:
         self._cache = CachedData()
         self._reload_lock = threading.Lock()
         self._health = LocalHealth()
+        self._force_next_refresh = False
         self._scope_account_emails = (
             _parse_csv_env("LINEAR_FAST_ACCOUNT_EMAILS")
             | _parse_csv_env("LINEAR_FAST_ACCOUNT_EMAIL")
@@ -125,6 +126,7 @@ class LinearLocalReader:
     def _set_healthy(self) -> None:
         self._health.degraded = False
         self._health.reason = None
+        self._health.failure_count = 0
         self._health.last_success_at = time.time()
 
     def get_health(self) -> dict[str, Any]:
@@ -811,9 +813,14 @@ class LinearLocalReader:
                     "updatedAt": val.get("updatedAt"),
                 }
 
+    def mark_stale(self) -> None:
+        """Force next cache access to trigger a full reload."""
+        self._force_next_refresh = True
+
     def _ensure_cache(self) -> CachedData:
         """Ensure the cache is loaded and not expired."""
-        if self._cache.is_expired() or not self._cache.teams:
+        if self._force_next_refresh or self._cache.is_expired() or not self._cache.teams:
+            self._force_next_refresh = False
             self._reload_cache()
         return self._cache
 
