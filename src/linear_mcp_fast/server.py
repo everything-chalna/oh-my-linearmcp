@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import atexit
 import logging
+import signal
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -19,6 +20,15 @@ from .router import ToolRouter
 logger = logging.getLogger(__name__)
 
 
+def _handle_sigterm(signum: int, frame: Any) -> None:
+    """Ensure child processes (mcp-remote) are cleaned up on SIGTERM."""
+    _shutdown()
+    raise SystemExit(0)
+
+
+signal.signal(signal.SIGTERM, _handle_sigterm)
+
+
 @asynccontextmanager
 async def _lifespan(server: FastMCP) -> AsyncIterator[None]:
     """Eagerly load local cache and verify official MCP connection on startup."""
@@ -30,7 +40,10 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[None]:
         get_official()._ensure_connected()
     except Exception as exc:
         logger.warning("Official MCP connection failed: %s", exc)
-    yield
+    try:
+        yield
+    finally:
+        _shutdown()
 
 
 mcp = FastMCP(
