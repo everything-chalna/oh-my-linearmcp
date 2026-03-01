@@ -17,6 +17,9 @@ class FakeReader:
     def is_degraded(self) -> bool:
         return self.degraded
 
+    def ensure_fresh(self) -> None:
+        pass
+
     def refresh_cache(self, force: bool = True) -> None:
         self.refresh_count += 1
 

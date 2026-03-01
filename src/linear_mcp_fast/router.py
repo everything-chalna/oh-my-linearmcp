@@ -11,7 +11,7 @@ import time
 from typing import Any
 
 from . import local_handlers
-from .official_session import OfficialMcpSessionManager, OfficialToolError
+from .official_session import DEFAULT_NOTION_MCP_URL, OfficialMcpSessionManager, OfficialToolError
 from .reader import LinearLocalReader
 
 logger = logging.getLogger(__name__)
@@ -89,12 +89,14 @@ class ToolRouter:
         return handler(self._reader, **arguments)
 
     def call_official(self, tool_name: str, arguments: dict[str, Any] | None = None) -> Any:
+        self._reader.ensure_fresh()
         result = self._official.call_tool(tool_name, arguments or {})
         if self._is_probable_write_tool(tool_name):
             self._mark_recent_write()
         return result
 
     def call_read(self, tool_name: str, arguments: dict[str, Any] | None = None) -> Any:
+        self._reader.ensure_fresh()
         args = arguments or {}
         remote_error: OfficialToolError | None = None
 
@@ -153,3 +155,24 @@ class ToolRouter:
     def reauth_official(self) -> dict[str, Any]:
         """Force re-authentication of the official Linear MCP OAuth token."""
         return self._official.reauth()
+
+    def reauth_notion(self) -> dict[str, Any]:
+        url = os.getenv("NOTION_OFFICIAL_MCP_URL", DEFAULT_NOTION_MCP_URL)
+        cache_result = OfficialMcpSessionManager.clear_token_cache_for_url(url)
+        return {
+            "status": "reauth_triggered",
+            "service": "notion",
+            "message": "Notion OAuth tokens cleared. Next Notion MCP call will trigger fresh OAuth login.",
+            **cache_result,
+        }
+
+    def reauth_all(self) -> dict[str, Any]:
+        linear_result = self.reauth_official()
+        notion_result = self.reauth_notion()
+        return {
+            "status": "reauth_triggered",
+            "services": ["linear", "notion"],
+            "message": "All OAuth tokens cleared.",
+            "linear": linear_result,
+            "notion": notion_result,
+        }

@@ -1,5 +1,5 @@
 """
-oh-my-linearmcp (OhMyLinearMCP) - unified Linear MCP via local cache + official fallback.
+oh-my-linear (OhMyLinear) - unified Linear MCP via local cache + official fallback.
 """
 
 from .server import main

@@ -1,4 +1,4 @@
-"""Compatibility package for running OhMyLinearMCP by distribution-aligned module name."""
+"""Compatibility package for running OhMyLinear by distribution-aligned module name."""
 
 from linear_mcp_fast import main
 

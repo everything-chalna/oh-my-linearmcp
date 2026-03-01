@@ -34,9 +34,9 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[None]:
 
 
 mcp = FastMCP(
-    "OhMyLinearMCP (Fast + Official)",
+    "OhMyLinear (Fast + Official)",
     instructions=(
-        "OhMyLinearMCP unified server. "
+        "OhMyLinear unified server. "
         "Read operations are served from local Linear.app cache first for speed, "
         "and automatically fall back to official Linear MCP when local cache is "
         "unsupported, degraded, or stale-sensitive. "
@@ -458,6 +458,26 @@ def reauth_official() -> dict[str, Any]:
         dict with status, message, urlHash, deletedFiles, and searchedDirs.
     """
     return get_router().reauth_official()
+
+
+@mcp.tool()
+def reauth_notion() -> dict[str, Any]:
+    """Clear Notion MCP OAuth token cache for re-authentication.
+
+    Removes cached OAuth tokens for the official Notion MCP server.
+    The next Notion MCP call will trigger a fresh OAuth login flow.
+    Override URL via NOTION_OFFICIAL_MCP_URL env var.
+    """
+    return get_router().reauth_notion()
+
+
+@mcp.tool()
+def reauth_all() -> dict[str, Any]:
+    """Clear OAuth tokens for both Linear and Notion MCP servers.
+
+    Combines reauth_official (Linear) and reauth_notion into a single call.
+    """
+    return get_router().reauth_all()
 
 
 @mcp.tool()

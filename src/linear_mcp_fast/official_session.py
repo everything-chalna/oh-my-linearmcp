@@ -30,6 +30,7 @@ from mcp.client.streamable_http import streamablehttp_client
 logger = logging.getLogger(__name__)
 
 DEFAULT_OFFICIAL_MCP_URL = "https://mcp.linear.app/mcp"
+DEFAULT_NOTION_MCP_URL = "https://mcp.notion.com/mcp"
 DEFAULT_TRANSPORT = "stdio"
 DEFAULT_STDIO_COMMAND = "npx"
 DEFAULT_STDIO_ARGS_PREFIX = ["-y", "mcp-remote"]
@@ -382,10 +383,11 @@ class OfficialMcpSessionManager:
             return []
         return sorted(mcp_auth.glob("mcp-remote-*"))
 
-    def _clear_token_cache(self) -> dict[str, Any]:
-        """Delete cached OAuth tokens for the configured MCP URL."""
-        url_hash = hashlib.md5(self._url.encode()).hexdigest()  # noqa: S324
-        cache_dirs = self._find_token_cache_dirs()
+    @staticmethod
+    def clear_token_cache_for_url(url: str) -> dict[str, Any]:
+        """Delete cached OAuth tokens for an arbitrary MCP server URL."""
+        url_hash = hashlib.md5(url.encode()).hexdigest()  # noqa: S324
+        cache_dirs = OfficialMcpSessionManager._find_token_cache_dirs()
 
         deleted = 0
         searched_dirs: list[str] = []
@@ -407,6 +409,10 @@ class OfficialMcpSessionManager:
             "deletedFiles": deleted,
             "searchedDirs": searched_dirs,
         }
+
+    def _clear_token_cache(self) -> dict[str, Any]:
+        """Delete cached OAuth tokens for the configured MCP URL."""
+        return self.clear_token_cache_for_url(self._url)
 
     def reauth(self) -> dict[str, Any]:
         """Force re-authentication by clearing cached tokens and disconnecting."""

@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "oh-my-linearmcp"
+name = "oh-my-linear"
 version = "0.5.0"
 description = "OhMyLinearMCP - unified Linear MCP (local-fast reads + official fallback/writes) on macOS"
 readme = "README.md"
@@ -30,11 +30,12 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/everything-chalna/oh-my-linearmcp"
-Repository = "https://github.com/everything-chalna/oh-my-linearmcp"
-Issues = "https://github.com/everything-chalna/oh-my-linearmcp/issues"
+Homepage = "https://github.com/everything-chalna/oh-my-linear"
+Repository = "https://github.com/everything-chalna/oh-my-linear"
+Issues = "https://github.com/everything-chalna/oh-my-linear/issues"
 
 [project.scripts]
+oh-my-linear = "linear_mcp_fast:main"
 oh-my-linearmcp = "linear_mcp_fast:main"
 linear-mcp-fast = "linear_mcp_fast:main"
 

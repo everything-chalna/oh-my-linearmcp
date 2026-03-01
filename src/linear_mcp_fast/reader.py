@@ -31,6 +31,9 @@ LINEAR_BLOB_PATH = os.path.expanduser(
 )
 
 CACHE_TTL_SECONDS = 300  # 5 minutes
+IDLE_REFRESH_THRESHOLD_SECONDS = int(
+    os.getenv("LINEAR_FAST_IDLE_REFRESH_SECONDS", "60")
+)
 LOAD_DOCUMENT_CONTENT = os.getenv("LINEAR_FAST_LOAD_DOCUMENT_CONTENT", "0") == "1"
 
 REQUIRED_STORE_KEYS = {"issues", "teams", "users", "workflow_states", "projects"}
@@ -107,6 +110,7 @@ class LinearLocalReader:
         self._reload_lock = threading.Lock()
         self._health = LocalHealth()
         self._force_next_refresh = False
+        self._last_tool_call_at: float = 0.0
         self._scope_account_emails = (
             _parse_csv_env("LINEAR_FAST_ACCOUNT_EMAILS")
             | _parse_csv_env("LINEAR_FAST_ACCOUNT_EMAIL")
@@ -139,6 +143,8 @@ class LinearLocalReader:
             "lastSuccessAt": self._health.last_success_at,
             "loadedAt": self._cache.loaded_at,
             "ttlSeconds": CACHE_TTL_SECONDS,
+            "lastToolCallAt": self._last_tool_call_at,
+            "idleRefreshThresholdSeconds": IDLE_REFRESH_THRESHOLD_SECONDS,
             "scopeAccountEmails": sorted(self._scope_account_emails),
             "scopeUserAccountIds": sorted(self._scope_user_account_ids),
         }
@@ -816,6 +822,21 @@ class LinearLocalReader:
     def mark_stale(self) -> None:
         """Force next cache access to trigger a full reload."""
         self._force_next_refresh = True
+
+    def ensure_fresh(self) -> None:
+        """Mark cache stale if idle gap exceeds threshold (reconnect heuristic)."""
+        now = time.time()
+        last = self._last_tool_call_at
+        self._last_tool_call_at = now
+        if last == 0.0:
+            return  # first call — lifespan already loaded cache
+        if now - last >= IDLE_REFRESH_THRESHOLD_SECONDS:
+            logger.info(
+                "Idle gap %.1fs >= %ds, forcing cache refresh",
+                now - last,
+                IDLE_REFRESH_THRESHOLD_SECONDS,
+            )
+            self._force_next_refresh = True
 
     def _ensure_cache(self) -> CachedData:
         """Ensure the cache is loaded and not expired."""
