@@ -21,7 +21,13 @@ logger = logging.getLogger(__name__)
 
 
 def _handle_sigterm(signum: int, frame: Any) -> None:
-    """Ensure child processes (mcp-remote) are cleaned up on SIGTERM."""
+    """On SIGTERM (reconnect): clear OAuth tokens so next start triggers fresh auth."""
+    if _official is not None:
+        try:
+            _official._clear_token_cache()
+            logger.info("OAuth tokens cleared for reconnect")
+        except Exception:
+            pass
     _shutdown()
     raise SystemExit(0)
 
@@ -31,11 +37,16 @@ signal.signal(signal.SIGTERM, _handle_sigterm)
 
 @asynccontextmanager
 async def _lifespan(server: FastMCP) -> AsyncIterator[None]:
-    """Load local cache on startup; official MCP connects lazily on first tool call."""
+    """Load local cache; connect official MCP eagerly only if cached tokens exist."""
     try:
         get_reader().refresh_cache(force=True)
     except Exception as exc:
         logger.warning("Cache init failed, starting degraded: %s", exc)
+    if get_official()._has_cached_tokens():
+        try:
+            get_official()._ensure_connected()
+        except Exception as exc:
+            logger.warning("Official MCP connection failed: %s", exc)
     try:
         yield
     finally:
