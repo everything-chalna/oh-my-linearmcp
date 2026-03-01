@@ -31,15 +31,11 @@ signal.signal(signal.SIGTERM, _handle_sigterm)
 
 @asynccontextmanager
 async def _lifespan(server: FastMCP) -> AsyncIterator[None]:
-    """Eagerly load local cache and verify official MCP connection on startup."""
+    """Load local cache on startup; official MCP connects lazily on first tool call."""
     try:
         get_reader().refresh_cache(force=True)
     except Exception as exc:
         logger.warning("Cache init failed, starting degraded: %s", exc)
-    try:
-        get_official()._ensure_connected()
-    except Exception as exc:
-        logger.warning("Official MCP connection failed: %s", exc)
     try:
         yield
     finally:
