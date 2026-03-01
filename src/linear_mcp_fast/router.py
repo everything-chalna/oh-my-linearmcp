@@ -158,7 +158,7 @@ class ToolRouter:
 
     def reauth_notion(self) -> dict[str, Any]:
         url = os.getenv("NOTION_OFFICIAL_MCP_URL", DEFAULT_NOTION_MCP_URL)
-        cache_result = OfficialMcpSessionManager.clear_token_cache_for_url(url)
+        cache_result = OfficialMcpSessionManager.clear_token_cache_for_url(url, full=True)
         return {
             "status": "reauth_triggered",
             "service": "notion",

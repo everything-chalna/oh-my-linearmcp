@@ -28,7 +28,7 @@ class TestClearTokenCacheForUrl:
             (cache_dir / f"{LINEAR_HASH}{suffix}").write_text("linear")
 
         with patch.object(Path, "home", return_value=tmp_path):
-            result = OfficialMcpSessionManager.clear_token_cache_for_url(NOTION_URL)
+            result = OfficialMcpSessionManager.clear_token_cache_for_url(NOTION_URL, full=True)
 
         assert result["deletedFiles"] == 3
         assert result["urlHash"] == NOTION_HASH

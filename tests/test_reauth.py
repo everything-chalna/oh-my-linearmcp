@@ -53,7 +53,7 @@ class TestClearTokenCache:
 
         mgr = self._make_manager()
         with patch.object(Path, "home", return_value=tmp_path):
-            result = mgr._clear_token_cache()
+            result = mgr._clear_token_cache(full=True)
 
         assert result["deletedFiles"] == 3
         assert result["urlHash"] == URL_HASH

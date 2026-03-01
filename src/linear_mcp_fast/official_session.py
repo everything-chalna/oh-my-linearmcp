@@ -403,17 +403,29 @@ class OfficialMcpSessionManager:
         return sorted(mcp_auth.glob("mcp-remote-*"))
 
     @staticmethod
-    def clear_token_cache_for_url(url: str) -> dict[str, Any]:
-        """Delete cached OAuth tokens for an arbitrary MCP server URL."""
+    def clear_token_cache_for_url(url: str, *, full: bool = False) -> dict[str, Any]:
+        """Delete cached OAuth tokens for an arbitrary MCP server URL.
+
+        Args:
+            url: The MCP server URL whose tokens should be cleared.
+            full: If True, also delete client_info and code_verifier
+                  (forces full OAuth client re-registration).
+                  If False (default), only delete the tokens file
+                  so mcp-remote reuses the existing client registration.
+        """
         url_hash = hashlib.md5(url.encode()).hexdigest()  # noqa: S324
         cache_dirs = OfficialMcpSessionManager._find_token_cache_dirs()
+
+        suffixes = ["_tokens.json"]
+        if full:
+            suffixes += ["_client_info.json", "_code_verifier.txt"]
 
         deleted = 0
         searched_dirs: list[str] = []
 
         for cache_dir in cache_dirs:
             searched_dirs.append(str(cache_dir))
-            for suffix in ("_tokens.json", "_client_info.json", "_code_verifier.txt"):
+            for suffix in suffixes:
                 token_file = cache_dir / f"{url_hash}{suffix}"
                 if token_file.exists():
                     try:
@@ -429,9 +441,9 @@ class OfficialMcpSessionManager:
             "searchedDirs": searched_dirs,
         }
 
-    def _clear_token_cache(self) -> dict[str, Any]:
+    def _clear_token_cache(self, *, full: bool = False) -> dict[str, Any]:
         """Delete cached OAuth tokens for the configured MCP URL."""
-        return self.clear_token_cache_for_url(self._url)
+        return self.clear_token_cache_for_url(self._url, full=full)
 
     def reauth(self) -> dict[str, Any]:
         """Force re-authentication by clearing cached tokens and disconnecting."""
@@ -443,8 +455,8 @@ class OfficialMcpSessionManager:
                 except Exception as exc:
                     self._log_cleanup_exception("Disconnect during reauth failed", exc)
 
-            # Clear token cache
-            cache_result = self._clear_token_cache()
+            # Clear token cache (full=True to also remove client registration)
+            cache_result = self._clear_token_cache(full=True)
             logger.info(
                 "OAuth reauth triggered: deleted %d cached token files",
                 cache_result["deletedFiles"],
