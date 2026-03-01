@@ -7,8 +7,10 @@ from __future__ import annotations
 import atexit
 import logging
 import signal
+import tempfile
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -19,15 +21,20 @@ from .router import ToolRouter
 
 logger = logging.getLogger(__name__)
 
+_RECONNECT_FLAG = Path(tempfile.gettempdir()) / "oh-my-linear-reconnect"
+
 
 def _handle_sigterm(signum: int, frame: Any) -> None:
-    """On SIGTERM (reconnect): clear OAuth tokens so next start triggers fresh auth."""
+    """On SIGTERM (reconnect): clear tokens + write flag for eager reauth on next start."""
     if _official is not None:
         try:
             _official._clear_token_cache()
-            logger.info("OAuth tokens cleared for reconnect")
         except Exception:
             pass
+    try:
+        _RECONNECT_FLAG.touch()
+    except Exception:
+        pass
     _shutdown()
     raise SystemExit(0)
 
@@ -37,12 +44,17 @@ signal.signal(signal.SIGTERM, _handle_sigterm)
 
 @asynccontextmanager
 async def _lifespan(server: FastMCP) -> AsyncIterator[None]:
-    """Load local cache; connect official MCP eagerly only if cached tokens exist."""
+    """Load local cache; connect official MCP based on reconnect flag / token state."""
     try:
         get_reader().refresh_cache(force=True)
     except Exception as exc:
         logger.warning("Cache init failed, starting degraded: %s", exc)
-    if get_official()._has_cached_tokens():
+
+    reconnecting = _RECONNECT_FLAG.exists()
+    if reconnecting:
+        _RECONNECT_FLAG.unlink(missing_ok=True)
+
+    if reconnecting or get_official()._has_cached_tokens():
         try:
             get_official()._ensure_connected()
         except Exception as exc:
